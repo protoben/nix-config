@@ -26,7 +26,7 @@
     ];
   };
 
-  # Prevents FS corruption on SSDs (http://github.com/NixOS/nixpkgs/issues/11276)
+  # Avoids FS corruption on SSDs (http://github.com/NixOS/nixpkgs/issues/11276)
   powerManagement.scsiLinkPolicy = "max_performance";
 
   # Select internationalisation properties.
@@ -40,11 +40,23 @@
 
   # List packages installed in system profile. To search by name, run:
   # $ nix-env -qaP | grep wget
-  environment.systemPackages = with pkgs; [
-    vim
-    git
-    acpi
-  ];
+  environment = {
+    systemPackages = with pkgs; [
+      vim
+      git
+      screen
+      w3m
+      acpi
+      gnumake
+      termite
+      chromium
+      ghc
+      cabal-install
+    ];
+    variables = {
+      BROWSER = "w3m";
+    };
+  };
 
   programs = {
     vim.defaultEditor = true;
@@ -65,20 +77,25 @@
   # Enable CUPS to print documents.
   # services.printing.enable = true;
 
-  # Enable the X11 windowing system.
-  # services.xserver.enable = true;
-  # services.xserver.layout = "us";
-  # services.xserver.xkbOptions = "eurosign:e";
-
-  # Enable the KDE Desktop Environment.
-  # services.xserver.displayManager.sddm.enable = true;
-  # services.xserver.windowManager.xmonad.enable = true;
+  services.xserver = {
+    enable = true;
+    layout = "us";
+    displayManager.slim.enable = true;
+    windowManager.xmonad = {
+      enable = true;
+      enableContribAndExtras = true;
+    };
+    synaptics = {
+      enable = true;
+      twoFingerScroll = true;
+    };
+  };
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
-  # users.extraUsers.guest = {
-  #   isNormalUser = true;
-  #   uid = 1000;
-  # };
+  users.extraUsers.hamlinb = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" ];
+  };
 
   # The NixOS release to be compatible with for stateful data such as databases.
   system.stateVersion = "17.03";
