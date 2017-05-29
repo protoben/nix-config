@@ -1,6 +1,7 @@
 # Edit this configuration file to define what should be installed on
 # your system.  Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running ‘nixos-help’).
+# vim: set expandtab tabstop=2 softtabstop=2 shiftwidth=2 autoindent:
 
 { config, pkgs, ... }:
 
@@ -49,6 +50,8 @@
       acpi
       gnumake
       termite
+      dunst
+      libnotify
       chromium
       ghc
       cabal-install
@@ -60,6 +63,7 @@
 
   programs = {
     vim.defaultEditor = true;
+    bash.enableCompletion = true;
   };
 
   networking = let wifi_nics = [ "wlp3s0" ]; in {
@@ -74,27 +78,64 @@
     };
   };
 
-  # Enable CUPS to print documents.
-  # services.printing.enable = true;
-
-  services.xserver = {
-    enable = true;
-    layout = "us";
-    displayManager.slim.enable = true;
-    windowManager.xmonad = {
+  services = {
+    xserver = {
       enable = true;
-      enableContribAndExtras = true;
+      layout = "us";
+      displayManager.slim.enable = true;
+      windowManager.xmonad = {
+        enable = true;
+        enableContribAndExtras = true;
+      };
+      synaptics = {
+        enable = true;
+        twoFingerScroll = true;
+      };
     };
-    synaptics = {
+    dbus.socketActivated = true;
+    #tlp.enable = true;
+    #thinkfan.enable = true;
+  };
+
+  systemd.user.services = {
+    "dunst" = {
       enable = true;
-      twoFingerScroll = true;
+      description = "";
+      wantedBy = [ "default.target" ];
+      serviceConfig.Restart = "always";
+      serviceConfig.RestartSec = 2;
+      serviceConfig.ExecStart = ''
+        ${pkgs.dunst}/bin/dunst \
+	  -geometry x1 \
+	  -lb '#000000' -nb '#000000' -cb '#000000' \
+	  -lf '#339966' \
+	  -nf '#993366' \
+	  -cf '#996633'
+      '';
     };
   };
 
-  # Define a user account. Don't forget to set a password with ‘passwd’.
+
+  nixpkgs.config.allowUnfree = true;
+
+  sound = {
+    enable = true;
+    mediaKeys = {
+      enable = true;
+    };
+    extraConfig = ''
+      defaults.pcm.!card 1;
+    '';
+  };
+
   users.extraUsers.hamlinb = {
     isNormalUser = true;
-    extraGroups = [ "wheel" ];
+    extraGroups = [ "wheel" "audio" ];
+  };
+
+  virtualisation.xen = {
+    enable = true;
+    domain0MemorySize = 4096;
   };
 
   # The NixOS release to be compatible with for stateful data such as databases.
