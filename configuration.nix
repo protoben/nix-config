@@ -1,13 +1,10 @@
-# Edit this configuration file to define what should be installed on
-# your system.  Help is available in the configuration.nix(5) man page
-# and in the NixOS manual (accessible by running ‘nixos-help’).
 # vim: set expandtab tabstop=2 softtabstop=2 shiftwidth=2 autoindent:
 
 { config, pkgs, ... }:
 
 {
   imports = [
-    ./hardware-configuration.nix # Include the results of the hardware scan.
+    ./hardware-configuration.nix
   ];
 
   boot = {
@@ -25,12 +22,26 @@
         preLVM = true;
       }
     ];
+    # Maybe fix xorg freezing, per http://www.thinkwiki.org/wiki/Category:W540
+    #kernelParams = boot.kernelParams ++ [
+    #  "i915.modeset=1"
+    #  "nouveau.modeset=0"
+    #  "rdblacklist=nouveau"
+    #];
+    #blacklistedKernelModules = boot.blacklistedKernelModules ++ [ "nouveau" ];
+  };
+
+  # Maybe fix xorg freezing (complete guess)
+  # Seems to cause the following in dmesg:
+  #   drm:gen8_irq_handler [i915]] *ERROR* Fault errors on pipe A
+  hardware.opengl = {
+    driSupport = false;
+    enable = false;
   };
 
   # Avoids FS corruption on SSDs (http://github.com/NixOS/nixpkgs/issues/11276)
   powerManagement.scsiLinkPolicy = "max_performance";
 
-  # Select internationalisation properties.
   i18n = {
     consoleFont = "Lat2-Terminus16";
     consoleKeyMap = "us";
@@ -39,22 +50,24 @@
 
   time.timeZone = "America/Los_Angeles";
 
-  # List packages installed in system profile. To search by name, run:
-  # $ nix-env -qaP | grep wget
   environment = {
     systemPackages = with pkgs; [
       vim
+      gnumake
       git
       screen
       w3m
       acpi
-      gnumake
       termite
       dunst
       libnotify
-      chromium
       ghc
       cabal-install
+      stack
+      nix-repl
+      pkgconfig
+      #chromium
+      firefox
     ];
     variables = {
       BROWSER = "w3m";
@@ -64,17 +77,30 @@
   programs = {
     vim.defaultEditor = true;
     bash.enableCompletion = true;
+    #chromium = {
+    #  defaultSearchProviderSearchURL = "https://duckduckgo.com?q={searchTerms}";
+    #  extensions = [
+    #    "cjpalhdlnbpafiamejdnhcphjbkeiagm" # uBlock Origin
+    #    "ogfcmafjalglgifnmanfmnieipoejdcf" # uMatrix
+    #    "dbepggeogbaibhgnhhndojpepiihcmeb" # Vimium
+    #  ];
+    #};
   };
 
-  networking = let wifi_nics = [ "wlp3s0" ]; in {
+  networking = {
+    usePredictableInterfaceNames = false;
     hostName = "rio";
     wireless = {
       enable = true;
-      interfaces = wifi_nics;
+      #interfaces = wifi_nics;
+      userControlled = {
+        enable = true;
+        group = "network";
+      };
     };
     dhcpcd = {
       enable = true;
-      allowInterfaces = wifi_nics;
+      #allowInterfaces = wifi_nics;
     };
   };
 
@@ -85,7 +111,13 @@
       displayManager.slim.enable = true;
       windowManager.xmonad = {
         enable = true;
-        enableContribAndExtras = true;
+        extraPackages = haskellPackages: with haskellPackages; [
+          xmonad-contrib
+          xmonad-extras
+          fdo-notify
+          url
+          pkgs.acpi
+        ];
       };
       synaptics = {
         enable = true;
@@ -93,6 +125,23 @@
       };
     };
     dbus.socketActivated = true;
+    acpid = {
+      enable = true;
+      handlers = {
+        "mute" = {
+          event = "button/mute.*";
+          action = "amixer -c 1 set Master toggle";
+        };
+        "volumedown" = {
+          event = "button/volumedown.*";
+          action = "amixer -c 1 set Master 20dB-";
+        };
+        "volumeup" = {
+          event = "button/volumeup.*";
+          action = "amixer -c 1 set Master 20dB+";
+        };
+      };
+    };
     #tlp.enable = true;
     #thinkfan.enable = true;
   };
@@ -106,23 +155,23 @@
       serviceConfig.RestartSec = 2;
       serviceConfig.ExecStart = ''
         ${pkgs.dunst}/bin/dunst \
-	  -geometry x1 \
-	  -lb '#000000' -nb '#000000' -cb '#000000' \
-	  -lf '#339966' \
-	  -nf '#993366' \
-	  -cf '#996633'
+          -geometry x1 \
+          -fn Terminus \
+          -lb '#000000' -nb '#000000' -cb '#000000' \
+          -lf '#339966' \
+          -nf '#993366' \
+          -cf '#996633'
       '';
     };
   };
 
 
-  nixpkgs.config.allowUnfree = true;
+  #nixpkgs.config = {
+  #  allowUnfree = true;
+  #};
 
   sound = {
     enable = true;
-    mediaKeys = {
-      enable = true;
-    };
     extraConfig = ''
       defaults.pcm.!card 1;
     '';
