@@ -1,10 +1,18 @@
 # vim: set expandtab tabstop=2 softtabstop=2 shiftwidth=2 autoindent:
 
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 {
   imports = [
     ./hardware-configuration.nix
+  ];
+
+  #nixpkgs.config.packageOverrides = (import ./packages.nix) lib;
+  nix.nixPath = [
+    #"nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos/nixpkgs"
+    "nixpkgs=/home/hamlinb/proj/nixpkgs"
+    "nixos-config=/etc/nixos/configuration.nix"
+    "/nix/var/nix/profiles/per-user/root/channels"
   ];
 
   boot = {
@@ -22,22 +30,26 @@
         preLVM = true;
       }
     ];
-    # Maybe fix xorg freezing, per http://www.thinkwiki.org/wiki/Category:W540
-    #kernelParams = boot.kernelParams ++ [
-    #  "i915.modeset=1"
-    #  "nouveau.modeset=0"
-    #  "rdblacklist=nouveau"
-    #];
-    #blacklistedKernelModules = boot.blacklistedKernelModules ++ [ "nouveau" ];
+    kernelParams = [
+      # The arch-wiki thinks this might fix the xorg freezes:
+      # https://wiki.archlinux.org/index.php/intel_graphics#X_freeze.2Fcrash_with_intel_driver
+      "intel_idle.max_cstate=1"
+
+      # Maybe fix xorg freezing, per http://www.thinkwiki.org/wiki/Category:W540
+      #"i915.modeset=1"
+      #"nouveau.modeset=0"
+      #"rdblacklist=nouveau"
+    ];
+    #blacklistedKernelModules = [ "nouveau" ];
   };
 
   # Maybe fix xorg freezing (complete guess)
   # Seems to cause the following in dmesg:
   #   drm:gen8_irq_handler [i915]] *ERROR* Fault errors on pipe A
-  hardware.opengl = {
-    driSupport = false;
-    enable = false;
-  };
+  #hardware.opengl = {
+  #  driSupport = false;
+  #  enable = false;
+  #};
 
   # Avoids FS corruption on SSDs (http://github.com/NixOS/nixpkgs/issues/11276)
   powerManagement.scsiLinkPolicy = "max_performance";
@@ -53,12 +65,13 @@
   environment = {
     systemPackages = with pkgs; [
       vim
+      kitty
       gnumake
       git
       screen
       w3m
       acpi
-      termite
+      #termite
       dunst
       libnotify
       ghc
@@ -72,11 +85,30 @@
     variables = {
       BROWSER = "w3m";
     };
+    shellAliases = {
+      ssh = "TERM=xterm-256color ssh";
+      ls = "ls --color=tty";
+    };
   };
 
   programs = {
     vim.defaultEditor = true;
-    bash.enableCompletion = true;
+    bash = {
+      enableCompletion = true;
+      promptInit =
+        let
+          UBG = "\\[$(tput setaf 21)\\]";
+          UFG = "\\[$(tput setaf 27)\\]";
+          RBG = "\\[$(tput setaf 124)\\]";
+          RFG = "\\[$(tput setaf 163)\\]";
+        in ''
+          if (( EUID == 0 )); then
+            PS1='${RBG}[${RFG}\u${RBG}@${RFG}\h${RBG}:${RFG}\w${RBG}]\$\[$(tput sgr0)\] '
+          else
+            PS1='${UBG}[${UFG}\u${UBG}@${UFG}\h${UBG}:${UFG}\w${UBG}]\$\[$(tput sgr0)\] '
+          fi
+        '';
+    };
     #chromium = {
     #  defaultSearchProviderSearchURL = "https://duckduckgo.com?q={searchTerms}";
     #  extensions = [

@@ -1,10 +1,12 @@
-INSTALL	= sudo install
+INSTALL	= sudo cp -r
 REBUILD	= sudo nixos-rebuild switch
-TARGET	= /etc/nixos/configuration.nix
-SOURCE	= configuration.nix
+DESTDIR	= /etc/nixos
+TARGETS = configuration.nix packages.nix packages
+SOURCES	= configuration.nix packages.nix packages/*/*
+CANARY	= /etc/nixos/configuration.nix
 
-all: $(TARGET)
+all: $(CANARY)
+
+$(CANARY): $(SOURCES)
+	$(INSTALL) $(TARGETS) $(DESTDIR)/
 	$(REBUILD)
-
-$(TARGET): $(SOURCE)
-	$(INSTALL) $(SOURCE) $(TARGET)
