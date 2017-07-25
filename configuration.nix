@@ -7,16 +7,20 @@
     ./hardware-configuration.nix
   ];
 
-  #nixpkgs.config.packageOverrides = (import ./packages.nix) lib;
-  nix.nixPath = [
-    #"nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos/nixpkgs"
-    "nixpkgs=/home/hamlinb/proj/nixpkgs"
-    "nixos-config=/etc/nixos/configuration.nix"
-    "/nix/var/nix/profiles/per-user/root/channels"
-  ];
+  nixpkgs.config.packageOverrides = (import ./packages.nix) lib;
+  nix = {
+    nixPath = [
+      "nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos/nixpkgs"
+      #"nixpkgs=/home/hamlinb/proj/nixpkgs"
+      "nixos-config=/etc/nixos/configuration.nix"
+      "/nix/var/nix/profiles/per-user/root/channels"
+    ];
+    useSandbox = true;
+    autoOptimiseStore = true;
+    trustedUsers = [ "root" "hamlinb" ];
+  };
 
   boot = {
-    # Use the GRUB 2 boot loader.
     loader.grub = {
       enable = true;
       version = 2;
@@ -34,22 +38,12 @@
       # The arch-wiki thinks this might fix the xorg freezes:
       # https://wiki.archlinux.org/index.php/intel_graphics#X_freeze.2Fcrash_with_intel_driver
       "intel_idle.max_cstate=1"
-
-      # Maybe fix xorg freezing, per http://www.thinkwiki.org/wiki/Category:W540
-      #"i915.modeset=1"
-      #"nouveau.modeset=0"
-      #"rdblacklist=nouveau"
+      "i915.enable_rc6=0"
     ];
-    #blacklistedKernelModules = [ "nouveau" ];
+    blacklistedKernelModules = [
+      "uvcvideo" # Remove and reboot on the off chance that we ever want the webcam
+    ];
   };
-
-  # Maybe fix xorg freezing (complete guess)
-  # Seems to cause the following in dmesg:
-  #   drm:gen8_irq_handler [i915]] *ERROR* Fault errors on pipe A
-  #hardware.opengl = {
-  #  driSupport = false;
-  #  enable = false;
-  #};
 
   # Avoids FS corruption on SSDs (http://github.com/NixOS/nixpkgs/issues/11276)
   powerManagement.scsiLinkPolicy = "max_performance";
@@ -64,23 +58,19 @@
 
   environment = {
     systemPackages = with pkgs; [
-      vim
-      kitty
-      gnumake
-      git
-      screen
-      w3m
       acpi
-      #termite
+      chromium
       dunst
+      firefox
+      git
+      gnumake
       libnotify
-      ghc
-      cabal-install
-      stack
+      mlterm
       nix-repl
       pkgconfig
-      #chromium
-      firefox
+      screen
+      vim
+      w3m
     ];
     variables = {
       BROWSER = "w3m";
@@ -109,14 +99,14 @@
           fi
         '';
     };
-    #chromium = {
-    #  defaultSearchProviderSearchURL = "https://duckduckgo.com?q={searchTerms}";
-    #  extensions = [
-    #    "cjpalhdlnbpafiamejdnhcphjbkeiagm" # uBlock Origin
-    #    "ogfcmafjalglgifnmanfmnieipoejdcf" # uMatrix
-    #    "dbepggeogbaibhgnhhndojpepiihcmeb" # Vimium
-    #  ];
-    #};
+    chromium = {
+      defaultSearchProviderSearchURL = "https://duckduckgo.com?q={searchTerms}";
+      extensions = [
+        "cjpalhdlnbpafiamejdnhcphjbkeiagm" # uBlock Origin
+        "ogfcmafjalglgifnmanfmnieipoejdcf" # uMatrix
+        "dbepggeogbaibhgnhhndojpepiihcmeb" # Vimium
+      ];
+    };
   };
 
   networking = {
@@ -137,6 +127,8 @@
   };
 
   services = {
+    dbus.socketActivated = true;
+    nixosManual.showManual = true;
     xserver = {
       enable = true;
       layout = "us";
@@ -155,27 +147,45 @@
         enable = true;
         twoFingerScroll = true;
       };
+      xkbOptions = "terminate:ctrl_alt_bksp, caps:ctrl_modifier";
     };
-    dbus.socketActivated = true;
     acpid = {
       enable = true;
-      handlers = {
-        "mute" = {
-          event = "button/mute.*";
-          action = "amixer -c 1 set Master toggle";
-        };
-        "volumedown" = {
-          event = "button/volumedown.*";
-          action = "amixer -c 1 set Master 20dB-";
-        };
-        "volumeup" = {
-          event = "button/volumeup.*";
-          action = "amixer -c 1 set Master 20dB+";
-        };
+      handlers =
+        let
+          amixer = "${pkgs.alsaUtils}/bin/amixer";
+          backlight_dir = "/sys/class/backlight/intel_backlight";
+        in {
+          "mute" = {
+            event = "button/mute.*";
+            action = "${amixer} -c 1 set Master toggle";
+          };
+          "volumedown" = {
+            event = "button/volumedown.*";
+            action = "${amixer} -c 1 set Master 5dB-";
+          };
+          "volumeup" = {
+            event = "button/volumeup.*";
+            action = "${amixer} -c 1 set Master 5dB+";
+          };
+          "brightnessup" = {
+            event = "video/brightnessup.*";
+            action = ''
+              next=$(( $(cat ${backlight_dir}/actual_brightness) + 100 ))
+              max=$(cat ${backlight_dir}/max_brightness)
+              tee /dev/tty5 > ${backlight_dir}/brightness <<< $(( next > max ? max : next ))
+            '';
+          };
+          "brightnessdown" = {
+            event = "video/brightnessdown.*";
+            action = ''
+              next=$(( $(cat ${backlight_dir}/actual_brightness) - 100 ))
+              min=100
+              tee /dev/tty5 > ${backlight_dir}/brightness <<< $(( next < min ? min : next ))
+            '';
+          };
       };
     };
-    #tlp.enable = true;
-    #thinkfan.enable = true;
   };
 
   systemd.user.services = {
@@ -192,15 +202,12 @@
           -lb '#000000' -nb '#000000' -cb '#000000' \
           -lf '#339966' \
           -nf '#993366' \
-          -cf '#996633'
+          -cf '#996633' \
+          -history_key 'ctrl+shift+p' \
+          -key         'ctrl+shift+n'
       '';
     };
   };
-
-
-  #nixpkgs.config = {
-  #  allowUnfree = true;
-  #};
 
   sound = {
     enable = true;
@@ -209,9 +216,16 @@
     '';
   };
 
-  users.extraUsers.hamlinb = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" "audio" ];
+  users = {
+    users = {
+      "hamlinb" = {
+        isNormalUser = true;
+        extraGroups = [ "wheel" "audio" "network" ];
+      };
+    };
+    groups = {
+      "network" = {};
+    };
   };
 
   virtualisation.xen = {

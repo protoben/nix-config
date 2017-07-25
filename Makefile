@@ -10,3 +10,5 @@ all: $(CANARY)
 $(CANARY): $(SOURCES)
 	$(INSTALL) $(TARGETS) $(DESTDIR)/
 	$(REBUILD)
+	systemctl --user daemon-reload
+	systemctl --user restart dunst
