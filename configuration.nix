@@ -7,11 +7,16 @@
     ./hardware-configuration.nix
   ];
 
-  nixpkgs.config.packageOverrides = (import ./packages.nix) lib;
+  # Enable OpenCL on Intel. Maybe move to platform-specific include?
+  hardware.opengl.extraPackages = with pkgs; [vaapiIntel libvdpau-va-gl vaapiVdpau intel-ocl];
+
+  nixpkgs.config = {
+    packageOverrides = (import ./packages.nix) lib;
+    allowUnfree = true;
+  };
   nix = {
     nixPath = [
       "nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos/nixpkgs"
-      #"nixpkgs=/home/hamlinb/proj/nixpkgs"
       "nixos-config=/etc/nixos/configuration.nix"
       "/nix/var/nix/profiles/per-user/root/channels"
     ];
@@ -43,6 +48,8 @@
     blacklistedKernelModules = [
       "uvcvideo" # Remove and reboot on the off chance that we ever want the webcam
     ];
+    extraModulePackages = [ pkgs.linuxPackages.rtl8812au ];
+    enableContainers = true;
   };
 
   # Avoids FS corruption on SSDs (http://github.com/NixOS/nixpkgs/issues/11276)
@@ -61,9 +68,10 @@
       acpi
       chromium
       dunst
-      firefox
+      firefox-bin
       git
       gnumake
+      hasklig
       libnotify
       mlterm
       nix-repl
@@ -109,12 +117,12 @@
     };
   };
 
-  networking = {
+  networking = let wifi_nics = [ "wlan0" ]; in {
     usePredictableInterfaceNames = false;
     hostName = "rio";
     wireless = {
       enable = true;
-      #interfaces = wifi_nics;
+      interfaces = wifi_nics;
       userControlled = {
         enable = true;
         group = "network";
@@ -122,7 +130,10 @@
     };
     dhcpcd = {
       enable = true;
-      #allowInterfaces = wifi_nics;
+      allowInterfaces = wifi_nics;
+    };
+    firewall = {
+      trustedInterfaces = [ "docker0" "xenbr0" ];
     };
   };
 
@@ -155,6 +166,8 @@
         let
           amixer = "${pkgs.alsaUtils}/bin/amixer";
           backlight_dir = "/sys/class/backlight/intel_backlight";
+          modprobe = "${pkgs.kmod}/bin/modprobe";
+          systemctl = "${pkgs.systemd}/bin/systemctl";
         in {
           "mute" = {
             event = "button/mute.*";
@@ -184,6 +197,15 @@
               tee /dev/tty5 > ${backlight_dir}/brightness <<< $(( next < min ? min : next ))
             '';
           };
+          "wakeup" = { # This is a kludge. Also probably the wrong event regex.
+            event = "button/lid.*open.*";
+            action = ''
+               ${modprobe} -r iwlwifi 2>/dev/null
+               ${modprobe} iwlwifi
+               sleep 1
+               ${systemctl} restart wpa_supplicant
+            '';
+          };
       };
     };
   };
@@ -198,7 +220,7 @@
       serviceConfig.ExecStart = ''
         ${pkgs.dunst}/bin/dunst \
           -geometry x1 \
-          -fn Terminus \
+          -fn 'Hasklig 11' \
           -lb '#000000' -nb '#000000' -cb '#000000' \
           -lf '#339966' \
           -nf '#993366' \
@@ -220,7 +242,13 @@
     users = {
       "hamlinb" = {
         isNormalUser = true;
-        extraGroups = [ "wheel" "audio" "network" ];
+        extraGroups = [
+          "wheel"
+          "audio"
+          "network"
+          "docker"
+          "vboxusers"
+        ];
       };
     };
     groups = {
@@ -228,9 +256,17 @@
     };
   };
 
-  virtualisation.xen = {
-    enable = true;
-    domain0MemorySize = 4096;
+  virtualisation = {
+    virtualbox = {
+      host.enable = true;
+    };
+    xen = {
+      enable = true;
+      domain0MemorySize = 8192;
+    };
+    docker = {
+      enable = true;
+    };
   };
 
   # The NixOS release to be compatible with for stateful data such as databases.
