@@ -11,9 +11,13 @@
   hardware.opengl.extraPackages = with pkgs; [vaapiIntel libvdpau-va-gl vaapiVdpau intel-ocl];
 
   nixpkgs.config = {
-    packageOverrides = (import ./packages.nix) lib;
+    packageOverrides = (pkgs: rec {
+      inherit pkgs;
+      protovim = pkgs.callPackage ./packages/protovim.nix {};
+    });
     allowUnfree = true;
   };
+
   nix = {
     nixPath = [
       "nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos/nixpkgs"
@@ -23,6 +27,7 @@
     useSandbox = true;
     autoOptimiseStore = true;
     trustedUsers = [ "root" "hamlinb" ];
+    buildCores = 0; # Use all cores for builds
   };
 
   boot = {
@@ -65,23 +70,28 @@
 
   environment = {
     systemPackages = with pkgs; [
+      man-pages
+      file
+      lsof
       acpi
-      chromium
       dunst
-      firefox-bin
       git
       gnumake
-      hasklig
       libnotify
-      mlterm
-      nix-repl
       pkgconfig
-      screen
-      vim
-      w3m
+      nvi
     ];
     variables = {
       BROWSER = "w3m";
+
+      # Less Colors for Man Pages
+      LESS_TERMCAP_mb = "\\[$(tput setaf 208)\\]";            # begin blinking
+      LESS_TERMCAP_md = "\\[$(tput bold; tput setaf 140)\\]"; # begin bold
+      LESS_TERMCAP_me = "\\[$(tput sgr0)\\]";                 # end mode
+      LESS_TERMCAP_se = "\\[$(tput sgr0)\\]";                 # end standout-mode
+      LESS_TERMCAP_so = "\\[$(tput smso; tput setaf 50)\\]";  # begin standout-mode - info box
+      LESS_TERMCAP_ue = "\\[$(tput rmul)\\]";                 # end underline
+      LESS_TERMCAP_us = "\\[$(tput smul; tput setaf 198)\\]"; # begin underline
     };
     shellAliases = {
       ssh = "TERM=xterm-256color ssh";
@@ -107,14 +117,14 @@
           fi
         '';
     };
-    chromium = {
-      defaultSearchProviderSearchURL = "https://duckduckgo.com?q={searchTerms}";
-      extensions = [
-        "cjpalhdlnbpafiamejdnhcphjbkeiagm" # uBlock Origin
-        "ogfcmafjalglgifnmanfmnieipoejdcf" # uMatrix
-        "dbepggeogbaibhgnhhndojpepiihcmeb" # Vimium
-      ];
-    };
+    #chromium = {
+    #  defaultSearchProviderSearchURL = "https://duckduckgo.com?q={searchTerms}";
+    #  extensions = [
+    #    "cjpalhdlnbpafiamejdnhcphjbkeiagm" # uBlock Origin
+    #    "ogfcmafjalglgifnmanfmnieipoejdcf" # uMatrix
+    #    "dbepggeogbaibhgnhhndojpepiihcmeb" # Vimium
+    #  ];
+    #};
   };
 
   networking = let wifi_nics = [ "wlan0" ]; in {
